@@ -1,14 +1,20 @@
 <script lang="ts">
   import Bottleneck from "bottleneck";
+  import Mustache from "mustache";
   import Totals from "./components/Totals.svelte";
-  import { countryByNumber, priceByNumber, type Pricing } from "./lib/pricing";
+  import {
+    countryByNumber,
+    priceByNumber,
+    segments,
+    type Pricing,
+  } from "./lib/pricing";
 
   const limiter = new Bottleneck({
     maxConcurrent: 1,
     minTime: Math.floor(1000 / 10),
   });
 
-  let phone_numbers: Pricing[] = [];
+  let phone_numbers: (Pricing & Record<string, any>)[] = [];
   let message = "";
   let loading = false;
 
@@ -46,7 +52,7 @@
     phone_numbers = [];
 
     numbers.forEach((number) => {
-      const mobile = number.split(",")[0].replace("\r", "").trim();
+      const mobile = number.replace("\r", "").trim();
       if (!mobile) return;
       if (!mobile.startsWith("+")) return;
       if (phone_numbers.some((p) => p.mobile === mobile)) return;
@@ -59,6 +65,51 @@
       });
     });
   };
+
+  const loadNumbersCSV = (text: string) => {
+    const numbers = text.split("\n");
+
+    const [headers] = numbers;
+    const arrHeaders = headers.split(",").map((h) => h.toLowerCase().trim());
+
+    const index = arrHeaders.indexOf("mobile");
+
+    if (index === -1) {
+      alert("CSV must have a header with 'mobile' column");
+      return;
+    }
+
+    phone_numbers = [];
+
+    numbers.forEach((number) => {
+      const mobile = number.split(",")[index].replace("\r", "").trim();
+      if (!mobile) return;
+      if (!mobile.startsWith("+")) return;
+      if (phone_numbers.some((p) => p.mobile === mobile)) return;
+
+      const obj = {};
+      arrHeaders.forEach((h, i) => {
+        obj[h] = number.split(",")[i].replace("\r", "").trim();
+      });
+
+      phone_numbers.push({
+        price: priceByNumber(mobile),
+        country: countryByNumber(mobile),
+        status: "ready",
+        ...obj,
+        mobile,
+      });
+    });
+  };
+
+  $: renderMessage = (phone: Pricing & Record<string, any>) => {
+    try {
+      return Mustache.render(message, phone);
+    } catch (error) {
+      console.error(error);
+      return "";
+    }
+  };
 </script>
 
 <svelte:window
@@ -66,10 +117,14 @@
     e.preventDefault();
     const text = e?.clipboardData?.getData("text") || "";
 
-    if (text.includes("\n")) {
+    if (text.includes(",")) {
+      loadNumbersCSV(text);
+    } else {
       loadNumbersText(text);
-    } else if (text.includes(",")) {
-      // CSV
+    }
+
+    if (phone_numbers.length === 0) {
+      alert("No phone numbers found");
     }
   }}
 />
@@ -79,6 +134,7 @@
     <thead>
       <tr>
         <th>Phone Number</th>
+        <th>Message Segments</th>
         <th>Price</th>
         <th>Status</th>
         <th>Error</th>
@@ -87,14 +143,15 @@
     </thead>
     <tbody>
       {#if phone_numbers.length > 0}
-        {#each phone_numbers as { mobile, price, status, error }, i}
+        {#each phone_numbers as phone, i}
           <tr>
-            <td>{mobile}</td>
-            <td>{price}</td>
-            <td>{status}</td>
-            <td>{error ?? ""}</td>
+            <td>{phone.mobile}</td>
+            <td>{segments(renderMessage(phone))}</td>
+            <td>{phone.price * segments(renderMessage(phone))}</td>
+            <td>{phone.status}</td>
+            <td>{phone.error ?? ""}</td>
             <td>
-              {#if status === "failed"}
+              {#if phone.status === "failed"}
                 <button
                   class="rounded-md bg-red-500 px-8 py-2 text-lg uppercase text-white duration-100 ease-in-out hover:bg-red-600"
                   on:click={async () => {
@@ -121,14 +178,17 @@
         {/each}
       {:else}
         <tr>
-          <td colspan="5"> No phone numbers loaded. Paste list or CSV.</td>
+          <td colspan="6"> No phone numbers loaded. Paste list or CSV.</td>
         </tr>
       {/if}
     </tbody>
   </table>
 </div>
 <div class="message">
-  <textarea disabled={loading} bind:value={message} placeholder="Message"
+  <textarea
+    disabled={loading}
+    bind:value={message}
+    placeholder="Message. If you paste a CSV, use {`{{header}}`} to insert values from the CSV. E.g. Hello {`{{name}}`}!"
   ></textarea>
   <span>{message.length}</span>
 </div>
@@ -177,8 +237,8 @@
     overflow-y: auto;
     padding-block: 1rem;
     padding-inline: 1rem;
-    max-height: calc(100vh - 24rem);
-    max-height: calc(100dvh - 24rem);
+    max-height: calc(100vh - 20rem);
+    max-height: calc(100dvh - 20rem);
     width: 100vw;
 
     & table {
@@ -203,7 +263,7 @@
     text-align: right;
     & textarea {
       width: 100%;
-      height: 10rem;
+      height: 4rem;
       padding: 0.5rem;
       font-size: 1rem;
     }

@@ -1,12 +1,17 @@
 <script lang="ts">
-  import { round, type Pricing } from "../lib/pricing";
+  import Mustache from "mustache";
+  import { round, segments, type Pricing } from "../lib/pricing";
 
-  export let numbers: Pricing[];
+  export let numbers: (Pricing & Record<string, any>)[];
   export let message: string;
 
-  const segments = (text: string) => {
-    if (text.length <= 160) return 1;
-    return Math.ceil(text.length / 160);
+  $: renderMessage = (phone: Pricing & Record<string, any>) => {
+    try {
+      return Mustache.render(message, phone);
+    } catch (error) {
+      console.error(error);
+      return "";
+    }
   };
 </script>
 
@@ -14,7 +19,7 @@
   <li class="electron-version">Recipients {numbers.length}</li>
   <li class="chrome-version">
     Est. Cost ${round(
-      segments(message) * numbers.map((p) => p.price).reduce((p, c) => p + c, 0)
+      numbers.map((p) => p.price * segments(renderMessage(p))).reduce((p, c) => p + c, 0)
     ).toFixed(2)}
   </li>
 </ul>

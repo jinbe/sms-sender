@@ -1279,3 +1279,8 @@ export type Pricing = {
 };
 
 export const round = (number: number) => Math.ceil(number * 100) / 100;
+
+export const segments = (text: string) => {
+  if (text.length <= 160) return 1;
+  return Math.ceil(text.length / 160);
+};
