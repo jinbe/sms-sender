@@ -18,15 +18,32 @@
   let message = "";
   let loading = false;
 
-  const sendMessage = limiter.wrap(async (idx: number) => {
+  const renderMessage = (
+    message: string,
+    phone: Pricing & Record<string, any>
+  ) => {
+    try {
+      return Mustache.render(message, phone);
+    } catch (error) {
+      console.error(error);
+      return "";
+    }
+  };
+
+  const sendMessage = limiter.wrap(async (idx: number, message: string) => {
     phone_numbers[idx].status = "queued";
+
+    const _message = renderMessage(message, phone_numbers[idx]);
+    if (!_message) {
+      throw new Error("Message is empty");
+    }
 
     try {
       // @ts-ignore
       const rs = await window.api.sendMessage({
         idx,
         phone: phone_numbers[idx].mobile,
-        message,
+        message: _message,
       });
 
       if (!rs.success) {
@@ -101,20 +118,15 @@
       });
     });
   };
-
-  $: renderMessage = (phone: Pricing & Record<string, any>) => {
-    try {
-      return Mustache.render(message, phone);
-    } catch (error) {
-      console.error(error);
-      return "";
-    }
-  };
 </script>
 
 <svelte:window
   on:paste={(e) => {
+    // @ts-ignore
+    if (e.target?.tagName === "TEXTAREA") return;
+
     e.preventDefault();
+
     const text = e?.clipboardData?.getData("text") || "";
 
     if (text.includes(",")) {
@@ -146,8 +158,8 @@
         {#each phone_numbers as phone, i}
           <tr>
             <td>{phone.mobile}</td>
-            <td>{segments(renderMessage(phone))}</td>
-            <td>{phone.price * segments(renderMessage(phone))}</td>
+            <td>{segments(renderMessage(message, phone))}</td>
+            <td>{phone.price * segments(renderMessage(message, phone))}</td>
             <td>{phone.status}</td>
             <td>{phone.error ?? ""}</td>
             <td>
@@ -163,7 +175,7 @@
                         return;
                       }
 
-                      await sendMessage(i);
+                      await sendMessage(i, message);
                     } catch (error) {
                     } finally {
                       loading = false;
@@ -210,7 +222,7 @@
           phone_numbers
             .filter((p) => p.status === "ready")
             .map(async (_, i) => {
-              return sendMessage(i);
+              return sendMessage(i, message);
             })
         );
       } catch (error) {
