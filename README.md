@@ -1,6 +1,6 @@
 # sms
 
-An Electron application with Svelte and TypeScript
+An Electron application with Svelte and TypeScript. At the moment I've only got signing instructions for MacOS. Windows will be added shortly.
 
 ## Recommended IDE Setup
 
@@ -33,7 +33,7 @@ $ pnpm build:mac
 $ pnpm build:linux
 ```
 
-# Config
+## Config
 
 Create ~/.env with the following
 
@@ -43,7 +43,7 @@ TWILIO_SID=
 TWILIO_TOKEN=
 ```
 
-# Signing
+## Signing
 
 Create ~/electron-builder.env with the following
 
