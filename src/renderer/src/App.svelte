@@ -18,6 +18,8 @@
   let message = "";
   let loading = false;
 
+  let dragged = false;
+
   const renderMessage = (
     message: string,
     phone: Pricing & Record<string, any>
@@ -118,17 +120,8 @@
       });
     });
   };
-</script>
 
-<svelte:window
-  on:paste={(e) => {
-    // @ts-ignore
-    if (e.target?.tagName === "TEXTAREA") return;
-
-    e.preventDefault();
-
-    const text = e?.clipboardData?.getData("text") || "";
-
+  const handleData = (text: string) => {
     if (text.includes(",")) {
       loadNumbersCSV(text);
     } else {
@@ -138,8 +131,34 @@
     if (phone_numbers.length === 0) {
       alert("No phone numbers found");
     }
-  }}
-/>
+  };
+
+  const onPaste = (e: ClipboardEvent) => {
+    // @ts-ignore
+    if (e.target?.tagName === "TEXTAREA") return;
+
+    e.preventDefault();
+
+    const text = e?.clipboardData?.getData("text") || "";
+
+    handleData(text);
+  };
+
+  const readFile = (file: File) => {
+    const reader = new FileReader();
+
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      handleData(text);
+    };
+
+    reader.readAsText(file);
+
+    dragged = false;
+  };
+</script>
+
+<svelte:window on:paste={onPaste} />
 
 <div class="table-wrapper">
   <table>
@@ -190,7 +209,61 @@
         {/each}
       {:else}
         <tr>
-          <td colspan="6"> No phone numbers loaded. Paste list or CSV.</td>
+          <td colspan="6">
+            <label
+              class="file-drop"
+              class:dragged
+              on:drop={(e) => {
+                e.preventDefault();
+
+                // @ts-ignore
+                if (e.dataTransfer.items) {
+                  // @ts-ignore
+                  [...e.dataTransfer.items].forEach((item, i) => {
+                    // If dropped items aren't files, reject them
+                    if (item.kind === "file") {
+                      const file = item.getAsFile();
+                      // @ts-ignore
+                      readFile(file);
+                    }
+                  });
+                } else {
+                  // @ts-ignore
+                  [...e.dataTransfer.files].forEach((file, i) => {
+                    readFile(file);
+                  });
+                }
+              }}
+              on:dragover={(e) => {
+                e.preventDefault();
+                dragged = true;
+              }}
+              on:dragleave={(e) => {
+                e.preventDefault();
+                dragged = false;
+              }}
+              on:dragend={(e) => {
+                e.preventDefault();
+                dragged = false;
+              }}
+              aria-dropeffect="copy"
+            >
+              <p>
+                No phone numbers loaded. Paste or drag and drop a list or CSV.
+              </p>
+              <input
+                type="file"
+                accept=".csv"
+                on:change={(e) => {
+                  // @ts-ignore
+                  if (e.target.files) {
+                    // @ts-ignore
+                    readFile(e.target.files[0]);
+                  }
+                }}
+              />
+            </label>
+          </td>
         </tr>
       {/if}
     </tbody>
@@ -281,6 +354,22 @@
     }
     & span {
       font-size: 0.8rem;
+    }
+  }
+
+  .file-drop {
+    padding: 1rem;
+    text-align: center;
+    display: block;
+    cursor: pointer;
+
+    &.dragged {
+      background-color: #f0f0f0;
+      color: #333;
+    }
+
+    & input {
+      display: none;
     }
   }
 </style>
